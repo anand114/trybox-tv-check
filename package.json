@@ -6,6 +6,5 @@
   "appName": "TryBox TV Check",
   "websiteURL": "https://trybox.app/",
   "main": "diag.js",
-  "keys": [],
-  "evaluateScriptOnDocumentStart": true
+  "keys": []
 }
