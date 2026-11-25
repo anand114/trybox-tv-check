@@ -1,4 +1,4 @@
-/* TryBox on-screen diagnostic v0.5. ES5. Reads only same-origin public CSS files (for the compat shim). No storage, no cookies. */
+/* TryBox on-screen diagnostic v0.7. ES5. Reads only same-origin public CSS files (for the compat shim). No storage, no cookies. */
 (function () {
   if (window.__tbDiag) { return; }
   window.__tbDiag = true;
@@ -171,7 +171,7 @@
   if (SHIM_ENABLED) {
     shimScan();
     try {
-      new MutationObserver(shimScan).observe(document.documentElement, { childList: true, subtree: true });
+      new MutationObserver(shimScan).observe(document.head || document.documentElement, { childList: true });
     } catch (eo) { setInterval(shimScan, 500); }
   }
   /* ---- end shim ---- */
@@ -226,23 +226,12 @@
     return out.join('\n');
   }
 
-  function textLen() {
-    var b = document.body, n = 0, i, c;
-    if (!b) { return '-'; }
-    for (i = 0; i < b.children.length; i++) {
-      c = b.children[i];
-      if (c.id === '__tbdiag' || c.tagName === 'SCRIPT' || c.tagName === 'STYLE') { continue; }
-      n += (c.innerText || '').length;
-    }
-    return n;
-  }
   function pageState() {
     var b = document.body, h = document.documentElement, s = '';
     try {
       var r = document.getElementById('root') || document.getElementById('app') || (b && b.firstElementChild);
       var cs = b && getComputedStyle(b);
       s = 'ready=' + document.readyState + ' bodyKids=' + (b ? b.children.length - (box && box.parentNode === b ? 1 : 0) : '-') +
-        ' textLen=' + textLen() +
         ' scripts=' + document.scripts.length +
         ' win=' + window.innerWidth + 'x' + window.innerHeight + '@' + window.devicePixelRatio +
         ' bodyBg=' + (cs ? cs.backgroundColor : '-') +
@@ -252,12 +241,14 @@
   }
 
 
+  var cNz = -1, cAll = 0;
   function counts() {
     var all = document.getElementsByTagName('*'), nz = 0, i, el, sheets = document.styleSheets, rs = [], n, b = document.body, cs;
-    for (i = 0; i < all.length; i++) { el = all[i]; if (el.offsetWidth > 0 && el.offsetHeight > 0) { nz++; } }
+    if (cNz < 0 && Date.now() - t0 > 8000) { for (i = 0; i < all.length; i++) { el = all[i]; if (el.offsetWidth > 0 && el.offsetHeight > 0) { nz++; } } cNz = nz; cAll = all.length; }
+    nz = cNz < 0 ? 'pending' : cNz;
     for (i = 0; i < sheets.length; i++) { n = -1; try { n = sheets[i].cssRules.length; } catch (e) { n = -2; } rs.push(n); }
     cs = b && getComputedStyle(b);
-    return 'elems=' + all.length + ' sized=' + nz + ' sheets=' + sheets.length + ' rules=[' + rs.join(',') + ']' +
+    return 'elems=' + (cNz < 0 ? 'pending' : cAll) + ' (once, after 8s) sized=' + nz + ' sheets=' + sheets.length + ' rules=[' + rs.join(',') + ']' +
       ' bodyColor=' + (cs ? cs.color : '-') + ' bodyH=' + (b ? b.offsetHeight : '-') +
       '\nSHIM ' + (SHIM_ENABLED ? 'on' : 'off') + ' fetched=' + shim.fetched + ' injected=' + shim.injected + ' failed=' + shim.failed +
       ' bytes=' + shim.bytesIn + '>' + shim.bytesOut;
@@ -277,10 +268,15 @@
   }
   var t0 = Date.now();
   function render() {
+    if (Date.now() - t0 > 20000) {
+      clearInterval(renderTimer);
+      if (box && box.parentNode) { box.parentNode.removeChild(box); }
+      return;
+    }
     var el = ensure();
     if (!el) { return; }
     el.textContent =
-      'TRYBOX DIAG v0.5 (t+' + Math.round((Date.now() - t0) / 1000) + 's)\n' +
+      'TRYBOX DIAG v0.7 (t+' + Math.round((Date.now() - t0) / 1000) + 's)\n' +
       'UA: ' + navigator.userAgent + '\n' +
       'URL: ' + shortUrl(location.href) + '\n' +
       pageState() + '\n' +
@@ -288,9 +284,10 @@
       features() + '\n' +
       (errs.length ? 'ERRORS (' + errTotal + '):\n' + errs.join('\n') : 'No errors captured so far. This does not prove the page is healthy: early parse, cross-origin and network failures can be missed.');
   }
-  setInterval(render, 1500);
+  var renderTimer = setInterval(render, 3000);
   document.addEventListener('DOMContentLoaded', render);
   window.addEventListener('load', render);
+  /* v0.7: overlay and all periodic work stop after 20 s; only the shim and D-pad nav remain. */
   /* ---- D-pad focus navigation (v0.5). Remote arrows move focus between visible focusable elements; OK clicks. ---- */
   var NAV_ENABLED = true;
   var navStyle = null;
