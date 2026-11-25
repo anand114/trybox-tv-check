@@ -1,0 +1,11 @@
+{
+  "name": "trybox-tv-check",
+  "version": "1.0.0",
+  "description": "Blank-page diagnostic overlay for trybox.app on Tizen TV",
+  "packageType": "mods",
+  "appName": "TryBox TV Check",
+  "websiteURL": "https://trybox.app/",
+  "main": "diag.js",
+  "keys": [],
+  "evaluateScriptOnDocumentStart": true
+}
