@@ -1,4 +1,4 @@
-/* TryBox on-screen diagnostic v0.4. ES5. Reads only same-origin public CSS files (for the compat shim). No storage, no cookies. */
+/* TryBox on-screen diagnostic v0.5. ES5. Reads only same-origin public CSS files (for the compat shim). No storage, no cookies. */
 (function () {
   if (window.__tbDiag) { return; }
   window.__tbDiag = true;
@@ -280,7 +280,7 @@
     var el = ensure();
     if (!el) { return; }
     el.textContent =
-      'TRYBOX DIAG v0.4 (t+' + Math.round((Date.now() - t0) / 1000) + 's)\n' +
+      'TRYBOX DIAG v0.5 (t+' + Math.round((Date.now() - t0) / 1000) + 's)\n' +
       'UA: ' + navigator.userAgent + '\n' +
       'URL: ' + shortUrl(location.href) + '\n' +
       pageState() + '\n' +
@@ -291,4 +291,99 @@
   setInterval(render, 1500);
   document.addEventListener('DOMContentLoaded', render);
   window.addEventListener('load', render);
+  /* ---- D-pad focus navigation (v0.5). Remote arrows move focus between visible focusable elements; OK clicks. ---- */
+  var NAV_ENABLED = true;
+  var navStyle = null;
+  var navHandler = null;
+  var FOCUSABLE = 'a[href],button,input,select,textarea,[tabindex],[role="button"],[role="link"],[role="menuitem"],[role="tab"]';
+  function navVisible(el) {
+    if (el.disabled) { return false; }
+    var ti = el.getAttribute('tabindex');
+    if (ti !== null && parseInt(ti, 10) < 0 && el.tagName !== 'A' && el.tagName !== 'BUTTON' && el.tagName !== 'INPUT') { return false; }
+    var r = el.getBoundingClientRect();
+    if (r.width < 4 || r.height < 4) { return false; }
+    var vh = window.innerHeight || document.documentElement.clientHeight;
+    var vw = window.innerWidth || document.documentElement.clientWidth;
+    if (r.bottom < 0 || r.top > vh || r.right < 0 || r.left > vw) { return false; }
+    var cs = window.getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none' || cs.pointerEvents === 'none') { return false; }
+    return true;
+  }
+  function navList() {
+    var all = document.querySelectorAll(FOCUSABLE), out = [], i;
+    for (i = 0; i < all.length; i++) {
+      if (all[i].id === '__tbdiag') { continue; }
+      if (navVisible(all[i])) { out.push(all[i]); }
+    }
+    return out;
+  }
+  function navMove(dir) {
+    var list = navList();
+    if (!list.length) { return false; }
+    var cur = document.activeElement;
+    if (!cur || cur === document.body || list.indexOf(cur) < 0) {
+      list[0].focus();
+      return true;
+    }
+    var cr = cur.getBoundingClientRect();
+    var cx = cr.left + cr.width / 2, cy = cr.top + cr.height / 2;
+    var best = null, bestScore = 1e9, i, r, dx, dy, prim, orth, score;
+    for (i = 0; i < list.length; i++) {
+      if (list[i] === cur) { continue; }
+      r = list[i].getBoundingClientRect();
+      dx = (r.left + r.width / 2) - cx;
+      dy = (r.top + r.height / 2) - cy;
+      if (dir === 'ArrowRight') { if (dx <= 1) { continue; } prim = dx; orth = Math.abs(dy); }
+      else if (dir === 'ArrowLeft') { if (dx >= -1) { continue; } prim = -dx; orth = Math.abs(dy); }
+      else if (dir === 'ArrowDown') { if (dy <= 1) { continue; } prim = dy; orth = Math.abs(dx); }
+      else { if (dy >= -1) { continue; } prim = -dy; orth = Math.abs(dx); }
+      score = prim + 2 * orth;
+      if (score < bestScore) { bestScore = score; best = list[i]; }
+    }
+    if (best) {
+      best.focus();
+      try { best.scrollIntoView({ block: 'nearest', inline: 'nearest' }); } catch (e) { }
+      return true;
+    }
+    return false;
+  }
+  function navKeyName(e) {
+    var k = e.key, c = e.keyCode;
+    if (k === 'ArrowLeft' || c === 37) { return 'ArrowLeft'; }
+    if (k === 'ArrowUp' || c === 38) { return 'ArrowUp'; }
+    if (k === 'ArrowRight' || c === 39) { return 'ArrowRight'; }
+    if (k === 'ArrowDown' || c === 40) { return 'ArrowDown'; }
+    if (k === 'Enter' || c === 13) { return 'Enter'; }
+    return '';
+  }
+  function navOn() {
+    if (navHandler) { return; }
+    navStyle = document.createElement('style');
+    navStyle.setAttribute('data-tb-nav', '1');
+    navStyle.appendChild(document.createTextNode(':focus{outline:4px solid #ffeb3b !important;outline-offset:2px !important}'));
+    (document.head || document.documentElement).appendChild(navStyle);
+    navHandler = function (e) {
+      if (!NAV_ENABLED) { return; }
+      var name = navKeyName(e);
+      if (!name) { return; }
+      var a = document.activeElement;
+      var typing = a && (a.tagName === 'TEXTAREA' || (a.tagName === 'INPUT' && /^(text|email|search|tel|url|password|number)$/i.test(a.type || 'text')));
+      if (name === 'Enter') {
+        if (a && a !== document.body && !typing && a.tagName !== 'BUTTON' && a.tagName !== 'A' && a.tagName !== 'INPUT') {
+          a.click(); e.preventDefault();
+        }
+        return;
+      }
+      if (typing && (name === 'ArrowLeft' || name === 'ArrowRight')) { return; }
+      if (navMove(name)) { e.preventDefault(); e.stopPropagation(); }
+    };
+    document.addEventListener('keydown', navHandler, true);
+  }
+  window.__tbNavOff = function () {
+    NAV_ENABLED = false;
+    if (navHandler) { document.removeEventListener('keydown', navHandler, true); navHandler = null; }
+    if (navStyle && navStyle.parentNode) { navStyle.parentNode.removeChild(navStyle); }
+    navStyle = null;
+  };
+  if (NAV_ENABLED) { navOn(); }
 })();
